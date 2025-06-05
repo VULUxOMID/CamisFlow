@@ -105,11 +105,24 @@ async function checkSavedUser() {
 }
 
 async function handleLogin() {
-    const code = document.getElementById('loginCode').value;
+    const code = document.getElementById('loginCode').value.trim();
     console.log('🔐 Login attempt with code:', code);
     
+    if (!code) {
+        alert('Please enter an access code');
+        return;
+    }
+    
+    if (!convexClient) {
+        console.error('❌ Convex client not initialized');
+        alert('Connection error. Please refresh the page.');
+        return;
+    }
+    
     try {
+        console.log('🔍 Querying user with code...');
         const user = await convexClient.query('users:getUserByAccessCode', { accessCode: code });
+        console.log('📋 Query result:', user);
         
         if (user) {
             currentUser = user;
@@ -120,11 +133,12 @@ async function handleLogin() {
             showMainApp();
             await loadDashboard();
         } else {
-            alert('Invalid access code. Use 222 for admin or 444 for viewer.');
+            console.log('❌ No user found for code:', code);
+            alert('Invalid access code. Please check your code and try again.');
         }
     } catch (error) {
         console.error('❌ Login failed:', error);
-        alert('Login failed. Please try again.');
+        alert('Login failed: ' + error.message);
     }
 }
 
@@ -302,7 +316,24 @@ function setupEventListeners() {
     console.log('🔧 Setting up event listeners...');
     
     // Login button
-    document.getElementById('loginBtn').addEventListener('click', handleLogin);
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+        console.log('✅ Login button listener added');
+    } else {
+        console.error('❌ Login button not found!');
+    }
+    
+    // Login input - Enter key support
+    const loginInput = document.getElementById('loginCode');
+    if (loginInput) {
+        loginInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+        console.log('✅ Login input listener added');
+    }
     
     // Logout button (the existing auth button becomes logout when logged in)
     document.getElementById('authBtn').addEventListener('click', () => {
