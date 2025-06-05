@@ -1,7 +1,26 @@
 // Camisflow - Period & Ovulation Tracker with Convex
 
 // Initialize Convex client
-const convex = new window.ConvexReactClient("https://beloved-seahorse-729.convex.cloud");
+console.log('🚀 Initializing Convex client...');
+console.log('Available Convex objects:', window.Convex);
+
+let convex;
+try {
+    if (window.Convex && window.Convex.ConvexHttpClient) {
+        convex = new window.Convex.ConvexHttpClient("https://beloved-seahorse-729.convex.cloud");
+        console.log('✅ Using ConvexHttpClient');
+    } else if (window.ConvexHttpClient) {
+        convex = new window.ConvexHttpClient("https://beloved-seahorse-729.convex.cloud");
+        console.log('✅ Using global ConvexHttpClient');
+    } else {
+        console.error('❌ No Convex client found!');
+        console.log('Window.Convex:', window.Convex);
+        console.log('Available:', Object.keys(window).filter(k => k.includes('Convex')));
+    }
+    console.log('✅ Convex client created:', convex);
+} catch (error) {
+    console.error('❌ Error creating Convex client:', error);
+}
 
 class CamisflowApp {
     constructor() {
@@ -27,13 +46,24 @@ class CamisflowApp {
     async loadUserData() {
         if (!this.currentUserId) return;
         
+        console.log('🔄 Loading user data for userId:', this.currentUserId);
+        
+        if (!convex) {
+            console.log('⚠️ No Convex client, using localStorage fallback');
+            this.loadLocalStorageData();
+            return;
+        }
+        
         try {
             // Load all user data in parallel
+            console.log('📊 Querying Convex for user data...');
             const [cycleLogs, moodLogs, notes] = await Promise.all([
                 convex.query("cycle:getCycleLogs", { userId: this.currentUserId }),
                 convex.query("moods:getMoodLogs", { userId: this.currentUserId }),
                 convex.query("notes:getNotes", { userId: this.currentUserId })
             ]);
+            
+            console.log('📈 Received data:', { cycleLogs, moodLogs, notes });
             
             this.cycleLogs = cycleLogs || [];
             this.moodLogs = moodLogs || [];
@@ -44,14 +74,60 @@ class CamisflowApp {
                 accessCode: this.currentUser.accessCode 
             });
             
+            console.log('👤 User data:', user);
+            
             if (user) {
                 this.averageCycleLength = user.averageCycleLength || 28;
                 this.lastPeriodStart = user.lastPeriodStart;
             }
             
+            console.log('✅ User data loaded successfully');
+            
         } catch (error) {
-            console.error('Error loading user data:', error);
+            console.error('❌ Error loading user data:', error);
+            console.log('⚠️ Falling back to localStorage');
+            this.loadLocalStorageData();
         }
+    }
+
+    loadLocalStorageData() {
+        console.log('📂 Loading from localStorage...');
+        const data = localStorage.getItem('camisflow-offline-data');
+        const localData = data ? JSON.parse(data) : {
+            cycle_logs: {},
+            mood_logs: {},
+            notes: {},
+            lastPeriodStart: null,
+            averageCycleLength: 28
+        };
+        
+        // Convert localStorage format to array format
+        this.cycleLogs = Object.entries(localData.cycle_logs).map(([date, phase]) => ({
+            date,
+            phase,
+            userId: this.currentUserId
+        }));
+        
+        this.moodLogs = Object.entries(localData.mood_logs).map(([date, mood]) => ({
+            date,
+            mood,
+            userId: this.currentUserId
+        }));
+        
+        this.notes = Object.entries(localData.notes).map(([date, content]) => ({
+            date,
+            content,
+            userId: this.currentUserId
+        }));
+        
+        this.averageCycleLength = localData.averageCycleLength || 28;
+        this.lastPeriodStart = localData.lastPeriodStart;
+        
+        console.log('📂 Loaded from localStorage:', {
+            cycleLogs: this.cycleLogs.length,
+            moodLogs: this.moodLogs.length,
+            notes: this.notes.length
+        });
     }
 
     async saveUserCycleInfo() {
@@ -82,12 +158,17 @@ class CamisflowApp {
     }
 
     async login(code) {
+        console.log('🔐 Attempting login with code:', code);
+        
         try {
             // First, try to find the user in Convex
+            console.log('🔍 Looking for user in Convex...');
             let user = await convex.query("users:getUserByAccessCode", { accessCode: code });
+            console.log('👤 Found user:', user);
             
             if (!user) {
                 // Create user if doesn't exist
+                console.log('➕ Creating new user...');
                 let userData = {};
                 if (code === '222') {
                     userData = { name: 'Cami', role: 'admin', accessCode: code };
@@ -100,19 +181,24 @@ class CamisflowApp {
                 
                 const userId = await convex.mutation("users:createUser", userData);
                 user = { _id: userId, ...userData };
+                console.log('✅ Created user:', user);
             }
 
             this.currentUser = user;
             this.currentUserId = user._id;
             localStorage.setItem('camisflow-current-user', JSON.stringify(user));
             
+            console.log('💾 Saved user to localStorage, loading data...');
+            
             // Load user's data
             await this.loadUserData();
             
             this.hideLoginModal();
             this.showMainApp();
+            
+            console.log('🎉 Login successful!');
         } catch (error) {
-            console.error('Login error:', error);
+            console.error('❌ Login error:', error);
             this.showError('Login failed. Please try again.');
         }
     }
@@ -528,34 +614,51 @@ class CamisflowApp {
     }
 
     // ===== PERIOD START TRACKING =====
-    handlePeriodStart() {
+    async handlePeriodStart() {
+        console.log('🩸 Period start button clicked!');
         const today = new Date();
         const todayStr = this.formatDate(today);
         
         // Check if period was already logged today
-        const existingLog = this.localData.cycle_logs[todayStr];
-        if (existingLog === 'period') {
+        const existingLog = this.getCycleLogForDate(todayStr);
+        if (existingLog && existingLog.phase === 'period') {
+            console.log('⚠️ Period already logged for today');
             this.showError('Period start has already been logged for today.');
             return;
         }
         
-        // Mark today as period start
-        this.localData.cycle_logs[todayStr] = 'period';
-        
-        // Update last period start date
-        this.localData.lastPeriodStart = todayStr;
-        
-        // Calculate new cycle length if we have previous data
-        this.recalculateCycleLength(today);
-        
-        // Save data
-        this.saveLocalData();
-        
-        // Update all displays
-        this.updateDashboard();
-        this.renderMiniCalendar();
-        this.renderCalendar();
-        this.updatePeriodStartButton();
+        try {
+            console.log('💾 Saving period start to Convex...');
+            
+            // Save to Convex
+            await convex.mutation("cycle:logCycle", {
+                userId: this.currentUserId,
+                date: todayStr,
+                phase: 'period',
+                actualStart: true
+            });
+            
+            // Update last period start date
+            this.lastPeriodStart = todayStr;
+            
+            // Save user cycle info
+            await this.saveUserCycleInfo();
+            
+            // Reload data to get the latest
+            await this.loadUserData();
+            
+            console.log('✅ Period start saved successfully!');
+            
+            // Update all displays
+            this.updateDashboard();
+            this.renderMiniCalendar();
+            this.renderCalendar();
+            this.updatePeriodStartButton();
+            
+        } catch (error) {
+            console.error('❌ Error saving period start:', error);
+            this.showError('Failed to save period start. Please try again.');
+        }
     }
 
     recalculateCycleLength(currentPeriodStart) {
