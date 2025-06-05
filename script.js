@@ -1,21 +1,19 @@
-// Camisflow - Period & Ovulation Tracker with Supabase
-// Configure your Supabase credentials here
-const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// Camisflow - Period & Ovulation Tracker with Convex
 
-// For demo purposes, using a demo instance - replace with your actual Supabase credentials
-const supabase = window.supabase ? window.supabase.createClient(
-    'https://your-project.supabase.co', 
-    'your-anon-key'
-) : null;
+// Initialize Convex client
+const convex = new window.ConvexReactClient("https://beloved-seahorse-729.convex.cloud");
 
 class CamisflowApp {
     constructor() {
         this.currentUser = null;
+        this.currentUserId = null;
         this.currentMonth = new Date();
         this.selectedDate = null;
-        this.isOnlineMode = !!supabase;
-        this.localData = this.loadLocalData();
+        this.cycleLogs = [];
+        this.moodLogs = [];
+        this.notes = [];
+        this.averageCycleLength = 28;
+        this.lastPeriodStart = null;
         this.init();
     }
 
@@ -25,23 +23,49 @@ class CamisflowApp {
         this.loadTheme();
     }
 
-    loadLocalData() {
-        const data = localStorage.getItem('camisflow-offline-data');
-        return data ? JSON.parse(data) : {
-            users: {
-                'cami': { id: 'cami', role: 'admin', name: 'Cami' },
-                'viewer': { id: 'viewer', role: 'viewer', name: 'Viewer' }
-            },
-            cycle_logs: {},
-            mood_logs: {},
-            notes: {},
-            lastPeriodStart: null,
-            averageCycleLength: 28
-        };
+    // ===== CONVEX DATA METHODS =====
+    async loadUserData() {
+        if (!this.currentUserId) return;
+        
+        try {
+            // Load all user data in parallel
+            const [cycleLogs, moodLogs, notes] = await Promise.all([
+                convex.query("cycle:getCycleLogs", { userId: this.currentUserId }),
+                convex.query("moods:getMoodLogs", { userId: this.currentUserId }),
+                convex.query("notes:getNotes", { userId: this.currentUserId })
+            ]);
+            
+            this.cycleLogs = cycleLogs || [];
+            this.moodLogs = moodLogs || [];
+            this.notes = notes || [];
+            
+            // Get user info for cycle settings
+            const user = await convex.query("users:getUserByAccessCode", { 
+                accessCode: this.currentUser.accessCode 
+            });
+            
+            if (user) {
+                this.averageCycleLength = user.averageCycleLength || 28;
+                this.lastPeriodStart = user.lastPeriodStart;
+            }
+            
+        } catch (error) {
+            console.error('Error loading user data:', error);
+        }
     }
 
-    saveLocalData() {
-        localStorage.setItem('camisflow-offline-data', JSON.stringify(this.localData));
+    async saveUserCycleInfo() {
+        if (!this.currentUserId) return;
+        
+        try {
+            await convex.mutation("users:updateUser", {
+                userId: this.currentUserId,
+                averageCycleLength: this.averageCycleLength,
+                lastPeriodStart: this.lastPeriodStart
+            });
+        } catch (error) {
+            console.error('Error saving user cycle info:', error);
+        }
     }
 
     // ===== AUTHENTICATION =====
@@ -49,6 +73,8 @@ class CamisflowApp {
         const savedUser = localStorage.getItem('camisflow-current-user');
         if (savedUser) {
             this.currentUser = JSON.parse(savedUser);
+            this.currentUserId = this.currentUser._id;
+            await this.loadUserData();
             this.showMainApp();
         } else {
             this.showLoginModal();
@@ -56,28 +82,39 @@ class CamisflowApp {
     }
 
     async login(code) {
-        let user = null;
-        
-        if (code === '222') {
-            user = { id: 'cami', role: 'admin', name: 'Cami' };
-        } else if (code === '444') {
-            user = { id: 'viewer', role: 'viewer', name: 'Viewer' };
-        } else {
-            this.showError('Invalid access code. Please try again.');
-            return;
-        }
+        try {
+            // First, try to find the user in Convex
+            let user = await convex.query("users:getUserByAccessCode", { accessCode: code });
+            
+            if (!user) {
+                // Create user if doesn't exist
+                let userData = {};
+                if (code === '222') {
+                    userData = { name: 'Cami', role: 'admin', accessCode: code };
+                } else if (code === '444') {
+                    userData = { name: 'Viewer', role: 'viewer', accessCode: code };
+                } else {
+                    this.showError('Invalid access code. Please try again.');
+                    return;
+                }
+                
+                const userId = await convex.mutation("users:createUser", userData);
+                user = { _id: userId, ...userData };
+            }
 
-        this.currentUser = user;
-        localStorage.setItem('camisflow-current-user', JSON.stringify(user));
-        
-        if (this.isOnlineMode) {
-            await this.syncUserData();
-        } else {
-            await this.loadOfflineData();
+            this.currentUser = user;
+            this.currentUserId = user._id;
+            localStorage.setItem('camisflow-current-user', JSON.stringify(user));
+            
+            // Load user's data
+            await this.loadUserData();
+            
+            this.hideLoginModal();
+            this.showMainApp();
+        } catch (error) {
+            console.error('Login error:', error);
+            this.showError('Login failed. Please try again.');
         }
-        
-        this.hideLoginModal();
-        this.showMainApp();
     }
 
     logout() {
@@ -158,49 +195,19 @@ class CamisflowApp {
         alert(message); // In production, use a proper toast/notification system
     }
 
-    // ===== DATA MANAGEMENT =====
-    async syncUserData() {
-        if (!this.isOnlineMode) return this.loadOfflineData();
-
-        try {
-            // In a real implementation, you would:
-            // 1. Create Supabase tables
-            // 2. Implement CRUD operations
-            // 3. Handle user authentication properly
-            
-            // For now, we'll use localStorage as fallback
-            this.loadOfflineData();
-        } catch (error) {
-            console.error('Supabase sync failed, using offline mode:', error);
-            this.loadOfflineData();
-        }
+    // ===== DATA ACCESS HELPERS =====
+    getCycleLogForDate(dateStr) {
+        return this.cycleLogs.find(log => log.date === dateStr);
     }
 
-    async loadOfflineData() {
-        // Initialize with demo data if first time
-        if (!this.localData.lastPeriodStart) {
-            this.initializeDemoData();
-        }
+    getMoodForDate(dateStr) {
+        const moodLog = this.moodLogs.find(log => log.date === dateStr);
+        return moodLog ? moodLog.mood : null;
     }
 
-    initializeDemoData() {
-        const demoDate = new Date();
-        demoDate.setDate(demoDate.getDate() - 10);
-        this.localData.lastPeriodStart = this.formatDate(demoDate);
-
-        // Add some demo mood data
-        for (let i = 0; i < 15; i++) {
-            const date = new Date();
-            date.setDate(date.getDate() - i);
-            const dateStr = this.formatDate(date);
-            this.localData.mood_logs[dateStr] = Math.floor(Math.random() * 5) + 1;
-        }
-
-        // Add some demo notes
-        const today = this.formatDate(new Date());
-        this.localData.notes[today] = "Feeling good today! 💕";
-
-        this.saveLocalData();
+    getNoteForDate(dateStr) {
+        const note = this.notes.find(note => note.date === dateStr);
+        return note ? note.content : null;
     }
 
     async loadAppData() {
@@ -231,8 +238,8 @@ class CamisflowApp {
     // ===== CYCLE CALCULATIONS =====
     getCurrentCycleInfo() {
         const today = new Date();
-        const lastPeriod = this.localData.lastPeriodStart ? new Date(this.localData.lastPeriodStart) : null;
-        const cycleLength = this.localData.averageCycleLength;
+        const lastPeriod = this.lastPeriodStart ? new Date(this.lastPeriodStart) : null;
+        const cycleLength = this.averageCycleLength;
 
         if (!lastPeriod) {
             return {
@@ -246,7 +253,8 @@ class CamisflowApp {
             };
         }
 
-        const daysSinceLastPeriod = this.daysBetween(lastPeriod, today);
+        // Calculate days since last period (0 = same day, 1 = next day, etc.)
+        const daysSinceLastPeriod = Math.floor((today - lastPeriod) / (1000 * 60 * 60 * 24));
         const dayOfCycle = (daysSinceLastPeriod % cycleLength) + 1;
         const daysUntilPeriod = cycleLength - dayOfCycle + 1;
         
@@ -281,15 +289,16 @@ class CamisflowApp {
         const dateStr = this.formatDate(date);
         
         // Check if there's a manual phase log for this date
-        if (this.localData.cycle_logs[dateStr]) {
-            return this.localData.cycle_logs[dateStr];
+        const cycleLog = this.getCycleLogForDate(dateStr);
+        if (cycleLog) {
+            return cycleLog.phase;
         }
 
-        const lastPeriod = this.localData.lastPeriodStart ? new Date(this.localData.lastPeriodStart) : null;
+        const lastPeriod = this.lastPeriodStart ? new Date(this.lastPeriodStart) : null;
         if (!lastPeriod) return 'normal';
 
-        const cycleLength = this.localData.averageCycleLength;
-        const daysSinceLastPeriod = this.daysBetween(lastPeriod, date);
+        const cycleLength = this.averageCycleLength;
+        const daysSinceLastPeriod = Math.floor((date - lastPeriod) / (1000 * 60 * 60 * 24));
         const dayOfCycle = (daysSinceLastPeriod % cycleLength) + 1;
 
         if (dayOfCycle <= 5) return 'period';

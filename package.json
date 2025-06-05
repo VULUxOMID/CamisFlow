@@ -1,0 +1,16 @@
+{
+  "name": "camisflow",
+  "version": "1.0.0",
+  "description": "Period & Ovulation Tracker",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.24.8"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^4.7.0"
+  }
+}
