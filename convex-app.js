@@ -98,10 +98,10 @@ async function checkSavedUser() {
             console.error('❌ Error verifying saved user:', error);
             logout();
         }
-    } else {
-        console.log('🔐 No saved user, showing login');
-        showLoginModal();
-    }
+            } else {
+            console.log('🔐 No saved user, showing login');
+            showLoginPage();
+        }
 }
 
 async function handleLogin() {
@@ -116,7 +116,7 @@ async function handleLogin() {
             localStorage.setItem('camisflow-current-user', JSON.stringify(user));
             console.log('✅ Login successful for:', user.name);
             
-            hideLoginModal();
+            hideLoginPage();
             showMainApp();
             await loadDashboard();
         } else {
@@ -248,6 +248,10 @@ async function showCurrentMood() {
 }
 
 function showMainApp() {
+    // Hide login page
+    hideLoginPage();
+    
+    // Show main app
     document.getElementById('mainContent').style.display = 'block';
     document.getElementById('bottomNav').style.display = 'flex';
     
@@ -266,14 +270,16 @@ function showMainApp() {
     console.log('🏠 Main app displayed for', currentUser.name);
 }
 
-function hideLoginModal() {
-    document.getElementById('loginModal').classList.remove('active');
+function hideLoginPage() {
+    document.getElementById('loginPage').classList.remove('active');
 }
 
-function showLoginModal() {
-    document.getElementById('loginModal').classList.add('active');
+function showLoginPage() {
+    document.getElementById('loginPage').classList.add('active');
     // Reset auth button text
     document.getElementById('authBtn').textContent = 'Login';
+    // Clear the input field
+    document.getElementById('loginCode').value = '';
 }
 
 function logout() {
@@ -286,8 +292,8 @@ function logout() {
     document.getElementById('bottomNav').style.display = 'none';
     document.getElementById('viewerNotice').style.display = 'none';
     
-    // Show login modal
-    showLoginModal();
+    // Show login page
+    showLoginPage();
     
     console.log('✅ Logged out successfully');
 }

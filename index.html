@@ -23,16 +23,39 @@
         </div>
     </nav>
 
-    <!-- Login Modal -->
-    <div id="loginModal" class="modal active">
-        <div class="modal-content login-content">
-            <div class="modal-header">
-                <h3>Welcome to Camisflow</h3>
+    <!-- Login Page -->
+    <div id="loginPage" class="login-page active">
+        <div class="login-container">
+            <div class="login-header">
+                <h1 class="login-logo">Camisflow</h1>
+                <p class="login-subtitle">Your personal period tracking companion</p>
             </div>
-            <div class="modal-body">
-                <p>Enter your access code:</p>
-                <input type="password" id="loginCode" placeholder="Enter your access code" class="login-input">
-                <button class="btn-primary" id="loginBtn">Login</button>
+            
+            <div class="login-form">
+                <h2>Welcome Back</h2>
+                <p>Enter your access code to continue</p>
+                
+                <div class="form-group">
+                    <input type="password" id="loginCode" placeholder="Enter access code" class="login-input">
+                    <button id="loginBtn" class="btn-primary full-width">Login</button>
+                </div>
+                
+                <div class="login-help">
+                    <div class="access-codes">
+                        <div class="code-item">
+                            <span class="code">222</span>
+                            <span class="role">Admin Access</span>
+                        </div>
+                        <div class="code-item">
+                            <span class="code">444</span>
+                            <span class="role">Viewer Access</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="login-footer">
+                <small>🔒 Secured by Convex Cloud</small>
             </div>
         </div>
     </div>
