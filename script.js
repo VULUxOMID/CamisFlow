@@ -1,41 +1,80 @@
 // Camisflow - Period & Ovulation Tracker with Convex
 
+console.log('🔥 SCRIPT LOADED - Testing Convex Integration');
+console.log('📱 User Agent:', navigator.userAgent);
+console.log('🌍 Location:', window.location.href);
+
+// Test what's available immediately
+console.log('🔍 Immediate window objects:', Object.keys(window).filter(k => k.toLowerCase().includes('convex')));
+console.log('🔍 Window.Convex (immediate):', window.Convex);
+
 // Initialize Convex client
 console.log('🚀 Initializing Convex client...');
-console.log('Available window objects:', Object.keys(window).filter(k => k.toLowerCase().includes('convex')));
-console.log('Window.Convex:', window.Convex);
 
 let convex = null;
 
 // Wait for Convex to be available
+let initRetryCount = 0;
 function initializeConvex() {
+    initRetryCount++;
+    console.log(`🔄 Initialize attempt #${initRetryCount}`);
+    
     try {
-        if (typeof window.Convex !== 'undefined') {
-            console.log('📦 Convex library loaded:', window.Convex);
+        console.log('🔍 Checking for Convex...');
+        console.log('Window.Convex type:', typeof window.Convex);
+        console.log('Window.Convex value:', window.Convex);
+        console.log('All window keys with "convex":', Object.keys(window).filter(k => k.toLowerCase().includes('convex')));
+        
+        if (typeof window.Convex !== 'undefined' && window.Convex) {
+            console.log('📦 Convex library detected!');
+            console.log('📋 Available Convex properties:', Object.keys(window.Convex));
             
             // Try different client types
             if (window.Convex.ConvexHttpClient) {
+                console.log('🎯 Found ConvexHttpClient, creating...');
                 convex = new window.Convex.ConvexHttpClient("https://confident-wolf-659.convex.cloud");
-                console.log('✅ Using Convex.ConvexHttpClient');
+                console.log('✅ ConvexHttpClient created successfully!');
             } else if (window.Convex.default && window.Convex.default.ConvexHttpClient) {
+                console.log('🎯 Found ConvexHttpClient in default, creating...');
                 convex = new window.Convex.default.ConvexHttpClient("https://confident-wolf-659.convex.cloud");
-                console.log('✅ Using Convex.default.ConvexHttpClient');
+                console.log('✅ ConvexHttpClient (from default) created successfully!');
             } else {
-                console.log('📋 Available Convex methods:', Object.keys(window.Convex));
+                console.warn('⚠️ ConvexHttpClient not found in expected locations');
+                console.log('📋 Available methods:', Object.keys(window.Convex));
             }
         } else {
-            console.log('⏳ Convex not loaded yet, retrying...');
-            setTimeout(initializeConvex, 500);
-            return;
+            if (initRetryCount < 10) {
+                console.log(`⏳ Convex not loaded yet (attempt ${initRetryCount}/10), retrying in 500ms...`);
+                setTimeout(initializeConvex, 500);
+                return;
+            } else {
+                console.error('❌ Convex failed to load after 10 attempts');
+                console.log('🚨 FALLING BACK TO LOCALSTORAGE MODE');
+            }
         }
         
         if (convex) {
-            console.log('✅ Convex client created successfully:', convex);
+            console.log('✅ Convex client ready:', convex);
+            console.log('🧪 Testing a simple query...');
+            // Test the connection
+            testConvexConnection();
         } else {
-            console.error('❌ Failed to create Convex client');
+            console.error('❌ No Convex client available - using localStorage fallback');
         }
     } catch (error) {
-        console.error('❌ Error creating Convex client:', error);
+        console.error('❌ Error in initializeConvex:', error);
+        console.error('❌ Error stack:', error.stack);
+    }
+}
+
+async function testConvexConnection() {
+    try {
+        console.log('🧪 Testing Convex connection...');
+        // Try a simple query to test the connection
+        const result = await convex.query("users:getUserByAccessCode", { accessCode: "test" });
+        console.log('✅ Convex connection test successful:', result);
+    } catch (error) {
+        console.error('❌ Convex connection test failed:', error);
     }
 }
 
@@ -1016,4 +1055,4 @@ if ('serviceWorker' in navigator) {
             .then(registration => console.log('SW registered'))
             .catch(error => console.log('SW registration failed'));
     });
-} 
+}
