@@ -2,24 +2,48 @@
 
 // Initialize Convex client
 console.log('🚀 Initializing Convex client...');
-console.log('Available Convex objects:', window.Convex);
+console.log('Available window objects:', Object.keys(window).filter(k => k.toLowerCase().includes('convex')));
+console.log('Window.Convex:', window.Convex);
 
-let convex;
-try {
-    if (window.Convex && window.Convex.ConvexHttpClient) {
-        convex = new window.Convex.ConvexHttpClient("https://beloved-seahorse-729.convex.cloud");
-        console.log('✅ Using ConvexHttpClient');
-    } else if (window.ConvexHttpClient) {
-        convex = new window.ConvexHttpClient("https://beloved-seahorse-729.convex.cloud");
-        console.log('✅ Using global ConvexHttpClient');
-    } else {
-        console.error('❌ No Convex client found!');
-        console.log('Window.Convex:', window.Convex);
-        console.log('Available:', Object.keys(window).filter(k => k.includes('Convex')));
+let convex = null;
+
+// Wait for Convex to be available
+function initializeConvex() {
+    try {
+        if (typeof window.Convex !== 'undefined') {
+            console.log('📦 Convex library loaded:', window.Convex);
+            
+            // Try different client types
+            if (window.Convex.ConvexHttpClient) {
+                convex = new window.Convex.ConvexHttpClient("https://confident-wolf-659.convex.cloud");
+                console.log('✅ Using Convex.ConvexHttpClient');
+            } else if (window.Convex.default && window.Convex.default.ConvexHttpClient) {
+                convex = new window.Convex.default.ConvexHttpClient("https://confident-wolf-659.convex.cloud");
+                console.log('✅ Using Convex.default.ConvexHttpClient');
+            } else {
+                console.log('📋 Available Convex methods:', Object.keys(window.Convex));
+            }
+        } else {
+            console.log('⏳ Convex not loaded yet, retrying...');
+            setTimeout(initializeConvex, 500);
+            return;
+        }
+        
+        if (convex) {
+            console.log('✅ Convex client created successfully:', convex);
+        } else {
+            console.error('❌ Failed to create Convex client');
+        }
+    } catch (error) {
+        console.error('❌ Error creating Convex client:', error);
     }
-    console.log('✅ Convex client created:', convex);
-} catch (error) {
-    console.error('❌ Error creating Convex client:', error);
+}
+
+// Initialize when DOM is ready or immediately if already ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeConvex);
+} else {
+    initializeConvex();
 }
 
 class CamisflowApp {

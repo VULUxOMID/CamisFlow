@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache - Camisflow</title>
+</head>
+<body>
+    <h1>Clear Cache and Test Convex</h1>
+    <button onclick="clearCache()">Clear All Cache</button>
+    <button onclick="testConvex()">Test Convex</button>
+    <div id="output"></div>
+
+    <script src="https://unpkg.com/convex@1.24.8/dist/umd/index.js"></script>
+    <script>
+        function clearCache() {
+            // Clear localStorage
+            localStorage.clear();
+            
+            // Clear cache if available
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => {
+                        caches.delete(name);
+                    });
+                });
+            }
+            
+            document.getElementById('output').innerHTML = '✅ Cache cleared! Please refresh the main app.';
+        }
+        
+        function testConvex() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<h3>Testing Convex...</h3>';
+            
+            console.log('Testing Convex...');
+            console.log('Window.Convex:', window.Convex);
+            
+            try {
+                if (window.Convex) {
+                    const client = new window.Convex.ConvexHttpClient("https://confident-wolf-659.convex.cloud");
+                    output.innerHTML += '✅ Convex client created successfully!<br>';
+                    console.log('✅ Convex client created:', client);
+                } else {
+                    output.innerHTML += '❌ Convex not available<br>';
+                    console.error('❌ Convex not available');
+                }
+            } catch (error) {
+                output.innerHTML += '❌ Error: ' + error.message + '<br>';
+                console.error('❌ Error:', error);
+            }
+        }
+    </script>
+</body>
+</html> 
